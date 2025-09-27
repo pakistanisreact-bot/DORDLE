@@ -20,8 +20,11 @@ Since Dreamhost is primarily for static hosting, we'll use a hybrid approach:
 
 3. **Set Environment Variables**:
    - Go to your project → Settings → Environment Variables
-   - Add: `GEMINI_API_KEY` = your actual Gemini API key
-   - Make sure it's set for "Production"
+   - Click "Add New"
+   - Name: `GEMINI_API_KEY`
+   - Value: `your_actual_gemini_api_key_here` (paste your real API key)
+   - Environment: Select "Production" (and optionally "Preview" for testing)
+   - Click "Save"
 
 4. **Deploy**:
    - Vercel will automatically deploy
@@ -73,6 +76,7 @@ Since Dreamhost is primarily for static hosting, we'll use a hybrid approach:
 2. **API Key Issues**:
    - Verify environment variable is set in Vercel
    - Check Vercel function logs for errors
+   - If you see "Secret does not exist" error, make sure you set the environment variable in Vercel dashboard, not in vercel.json
 
 3. **Frontend Not Loading**:
    - Check file paths on Dreamhost

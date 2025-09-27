@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2310b981' /%3E%3Ctext x='50' y='58' font-family='sans-serif' font-size='40' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3EDW%3C/text%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desi Wordle</title>
+    <!-- Babel Standalone for in-browser TSX/JSX transpilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  @keyframes matrix-fall {
+    0% { transform: translateY(-100vh); }
+    100% { transform: translateY(100vh); }
+  }
+
+  .matrix-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    overflow: hidden;
+    background: #000;
+    color: #0f0;
+    pointer-events: none;
+  }
+
+  .matrix-column {
+    position: absolute;
+    top: 0;
+    height: 100vh;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    white-space: nowrap;
+    user-select: none;
+    font-size: 16px;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.7), 0 0 10px rgba(0, 255, 0, 0.5);
+    opacity: 0;
+    animation: matrix-fall linear infinite;
+  }
+
+  /* Matrix Theme Overrides */
+  html.matrix-mode {
+    font-family: 'Courier New', Courier, monospace;
+  }
+  html.matrix-mode body {
+    background-color: #000 !important;
+    color: #0f0 !important;
+  }
+  
+  .matrix-mode .border-slate-700 { border-color: #004d00; }
+  .matrix-mode .border-slate-400 { border-color: #0f0; }
+  .matrix-mode .text-slate-400 { color: #00b300; }
+  .matrix-mode .text-slate-300 { color: #00e600; }
+  .matrix-mode .text-emerald-400 { color: #34d399; }
+  .matrix-mode .text-white, .matrix-mode .hover\:text-white:hover { color: #0f0; }
+  
+  /* Backgrounds */
+  .matrix-mode .bg-slate-900, .matrix-mode .bg-slate-800 { background-color: #080808; }
+  .matrix-mode .bg-slate-700, .matrix-mode .bg-slate-500, .matrix-mode .bg-slate-600 { background-color: #002900; }
+  .matrix-mode .hover\:bg-slate-700:hover, .matrix-mode .hover\:bg-slate-600:hover { background-color: #004d00; }
+  
+  /* Tiles */
+  .matrix-mode .bg-emerald-600, .matrix-mode .border-emerald-600 { background-color: #0f0; border-color: #0f0; color: #000; }
+  .matrix-mode .bg-amber-500, .matrix-mode .border-amber-500 { background-color: #009900; border-color: #009900; color: #000; }
+  .matrix-mode .bg-slate-700.tile-absent, .matrix-mode .border-slate-700.tile-absent { background-color: #222; border-color: #222; }
+
+
+  /* Buttons */
+  .matrix-mode button.bg-emerald-600 { background-color: #008000; color: #fff; }
+  .matrix-mode button.hover\:bg-emerald-700:hover { background-color: #009900; }
+  .matrix-mode .bg-indigo-600 { background-color: #007300; }
+  .matrix-mode .hover\:bg-indigo-700:hover { background-color: #008c00; }
+  .matrix-mode .disabled\:bg-slate-600:disabled { background-color: #002900; color: #006600; }
+
+  /* Keyboard keys */
+  .matrix-mode button.bg-emerald-600.text-white, .matrix-mode button.bg-amber-500.text-white { color: #000; }
+  .matrix-mode button.bg-slate-700.text-slate-300 { color: #00e600; }
+  
+  /* Toast */
+  .matrix-mode .text-slate-900 { color: #0f0; }
+  .matrix-mode .bg-slate-100 { background-color: #001a00; border: 1px solid #0f0; }
+  
+  /* Modal */
+  .matrix-mode .bg-black.bg-opacity-70 { background-color: rgba(0, 50, 0, 0.7); }
+</style>
+<link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.544.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/assets/index-B5Qt9EMX.js"></script>
+</head>
+  <body class="bg-slate-900 text-white">
+    <div id="root"></div>
+    <script src="./config.js"></script>
+    <script type="text/babel" data-type="module">
+// External Imports - These are handled by the importmap
+import React, { useState, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom/client';
+import { Loader2, Lightbulb, BarChart2, Terminal, Delete, CornerDownLeft, X, Share2 } from 'lucide-react';
+
+// --- Start of Inlined Application Code ---
+
+// From types.ts
+const LetterState = {
+  INITIAL: 'INITIAL',
+  ABSENT: 'ABSENT',
+  PRESENT: 'PRESENT',
+  CORRECT: 'CORRECT',
+};
+
+const GameStatus = {
+  PLAYING: 'PLAYING',
+  WON: 'WON',
+  LOST: 'LOST',
+};
+
+// From constants.ts
+const MAX_GUESSES = 6;
+const MIN_WORD_LENGTH = 3;
+const MAX_WORD_LENGTH = 8;
+const MAX_USED_WORDS_IN_PROMPT = 50;
+
+const KEYBOARD_LAYOUT = [
+  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+  ['enter', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'backspace'],
+];
+
+// From services/apiService.ts
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001' 
+  : 'https://your-vercel-app.vercel.app'; // Replace with your actual Vercel URL
+
+const getNewWord = async (usedWords) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/get-word`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ usedWords: usedWords || [] }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch new word');
+    }
+
+    const data = await response.json();
+    return data.word;
+  } catch (error) {
+    console.error("Error fetching new word:", error);
+    throw new Error("Failed to fetch a new word from the AI service. Please check your network connection.");
+  }
+};
+
+const getClue = async (word) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/get-clue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ word }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch clue');
+    }
+
+    const data = await response.json();
+    return data.clue;
+  } catch (error) {
+    console.error("Error fetching clue:", error);
+    throw new Error("Could not fetch a clue. The AI service might be unavailable.");
+  }
+};
+
+
+// From utils/gameUtils.ts
+const getLetterState = (letter, index, solution) => {
+  if (solution[index] === letter) {
+    return LetterState.CORRECT;
+  }
+  if (solution.includes(letter)) {
+    return LetterState.PRESENT;
+  }
+  return LetterState.ABSENT;
+};
+
+const isSameDay = (ts1, ts2) => {
+    const d1 = new Date(ts1);
+    const d2 = new Date(ts2);
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+};
+
+
+// From components/Header.tsx
+const Header = ({ onStatsClick, isMatrixMode, onMatrixToggle }) => {
+  return (
+    <header className="flex items-center justify-between p-4 border-b border-slate-700">
+      <h1 className="text-2xl md:text-4xl font-bold tracking-wider uppercase">
+        Desi Wordle
+      </h1>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onMatrixToggle}
+          className={`p-2 rounded-md hover:bg-slate-700 transition-colors ${isMatrixMode ? 'text-emerald-400' : ''}`}
+          aria-label="Toggle Matrix Mode"
+          title="Toggle Matrix Mode"
+        >
+          <Terminal size={24} />
+        </button>
+        <button
+          onClick={onStatsClick}
+          className="p-2 rounded-md hover:bg-slate-700 transition-colors"
+          aria-label="View stats"
+          title="View Stats"
+        >
+          <BarChart2 size={24} />
+        </button>
+      </div>
+    </header>
+  );
+};
+
+// From components/Grid.tsx
+const Grid = ({ solution, guesses, currentAttempt, currentGuess }) => {
+    const rows = Array.from({ length: MAX_GUESSES });
+    const wordLength = solution.length;
+
+    return (
+        <div className="flex-grow flex items-center justify-center p-4">
+            <div className={`grid gap-1.5`} style={{ gridTemplateColumns: `repeat(${wordLength}, minmax(0, 1fr))` }}>
+                {rows.map((_, rowIndex) => {
+                    const isSubmittedRow = rowIndex < currentAttempt;
+                    const isCurrentRow = rowIndex === currentAttempt;
+                    const guess = isSubmittedRow ? guesses[rowIndex] : (isCurrentRow ? currentGuess : '');
+                    const word = guess.padEnd(wordLength, ' ').split('');
+
+                    return word.map((letter, letterIndex) => {
+                        let tileClasses = "w-14 h-14 sm:w-16 sm:h-16 border-2 flex items-center justify-center text-3xl font-bold uppercase rounded-md transition-all duration-500";
+
+                        if (isSubmittedRow) {
+                            const state = getLetterState(letter, letterIndex, solution);
+                            const stateClasses = {
+                                [LetterState.CORRECT]: 'bg-emerald-600 border-emerald-600',
+                                [LetterState.PRESENT]: 'bg-amber-500 border-amber-500',
+                                [LetterState.ABSENT]: 'bg-slate-700 border-slate-700 tile-absent',
+                            }[state];
+                            tileClasses += ` ${stateClasses}`;
+                        } else {
+                            tileClasses += ` ${isCurrentRow && letter.trim() ? 'border-slate-400' : 'border-slate-700'}`;
+                        }
+
+                        return (
+                            <div key={`${rowIndex}-${letterIndex}`} className={tileClasses}>
+                                {letter}
+                            </div>
+                        );
+                    });
+                })}
+            </div>
+        </div>
+    );
+};
+
+// From components/Keyboard.tsx
+const Keyboard = ({ onKeyPress, letterStatuses }) => {
+  return (
+    <div className="w-full max-w-2xl mx-auto p-2">
+      {KEYBOARD_LAYOUT.map((row, rowIndex) => (
+        <div key={rowIndex} className="flex justify-center gap-1.5 my-1.5">
+          {row.map((key) => {
+            const state = letterStatuses[key] || LetterState.INITIAL;
+            const stateClasses = {
+              [LetterState.CORRECT]: 'bg-emerald-600 text-white',
+              [LetterState.PRESENT]: 'bg-amber-500 text-white',
+              [LetterState.ABSENT]: 'bg-slate-700 text-slate-300',
+              [LetterState.INITIAL]: 'bg-slate-500 hover:bg-slate-600',
+            }[state];
+            
+            const isSpecialKey = key === 'enter' || key === 'backspace';
+
+            return (
+              <button
+                key={key}
+                onClick={() => onKeyPress(key)}
+                className={`h-14 rounded-md uppercase font-bold flex items-center justify-center transition-colors ${stateClasses} ${isSpecialKey ? 'flex-grow px-3' : 'w-9 sm:w-11'}`}
+              >
+                {key === 'backspace' ? <Delete /> : key === 'enter' ? <CornerDownLeft /> : key}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// From components/Modal.tsx
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md text-center relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-2xl font-bold mb-4">{title}</h2>
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-white"
+          aria-label="Close modal"
+        >
+          <X size={24} />
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// From components/Stats.tsx
+const StatItem = ({ value, label }) => (
+  <div className="flex flex-col items-center">
+    <p className="text-3xl font-bold">{value}</p>
+    <p className="text-xs text-slate-400 uppercase tracking-widest">{label}</p>
+  </div>
+);
+
+const Stats = ({ stats }) => {
+  const winPercentage = stats.gamesPlayed > 0 ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
+  
+  return (
+    <div className="mt-6">
+      <div className="grid grid-cols-4 gap-4 text-center">
+        <StatItem value={stats.gamesPlayed} label="Played" />
+        <StatItem value={winPercentage} label="Win %" />
+        <StatItem value={stats.currentStreak} label="Streak" />
+        <StatItem value={stats.maxStreak} label="Max Streak" />
+      </div>
+    </div>
+  );
+};
+
+// From components/ApiErrorDisplay.tsx
+const ApiErrorDisplay = ({ message, onRetry }) => (
+    <div className="flex-grow flex items-center justify-center p-4 text-center">
+        <div className="bg-slate-800 p-8 rounded-lg shadow-lg max-w-lg">
+            <h2 className="text-2xl font-bold text-red-400 mb-4">API Service Error</h2>
+            <p className="text-slate-300 mb-6">
+                The connection to the generative AI service failed. This may be caused by a missing or invalid API key.
+            </p>
+            <p className="text-sm bg-slate-900 p-3 rounded-md text-slate-400 mb-6">
+                <strong>Details:</strong> {message}
+            </p>
+            <p className="text-slate-300 mb-6">
+                Please ensure your <code className="bg-slate-900 px-1 py-0.5 rounded">config.js</code> file is correctly set up with a valid Gemini API key.
+            </p>
+            <button
+                onClick={onRetry}
+                className="px-6 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors font-bold"
+            >
+                Retry Connection
+            </button>
+        </div>
+    </div>
+);
+
+// From components/MatrixBackground.tsx
+const MatrixBackground = () => {
+    const columns = Array.from({ length: 50 });
+    const characters = 'अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह';
+
+    return (
+        <div className="matrix-bg" aria-hidden="true">
+            {columns.map((_, i) => {
+                const text = Array.from({ length: 30 }).map(() => characters[Math.floor(Math.random() * characters.length)]).join('');
+                const style = {
+                    left: `${i * 2}%`,
+                    animationDuration: `${Math.random() * 10 + 15}s`,
+                    animationDelay: `${Math.random() * -25}s`,
+                };
+                return <div key={i} className="matrix-column" style={style}>{text}</div>;
+            })}
+        </div>
+    );
+};
+
+// From App.tsx
+const App = () => {
+    const [gameState, setGameState] = useState(null);
+    const [currentGuess, setCurrentGuess] = useState('');
+    const [letterStatuses, setLetterStatuses] = useState({});
+    const [stats, setStats] = useState({ gamesPlayed: 0, gamesWon: 0, currentStreak: 0, maxStreak: 0 });
+    const [usedWords, setUsedWords] = useState([]);
+    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+    const [isEndGameModalOpen, setIsEndGameModalOpen] = useState(false);
+    const [clue, setClue] = useState('');
+    const [isClueLoading, setIsClueLoading] = useState(false);
+    const [isWordLoading, setIsWordLoading] = useState(true);
+    const [toastMessage, setToastMessage] = useState('');
+    const [isMatrixMode, setIsMatrixMode] = useState(false);
+    const [apiError, setApiError] = useState(null);
+
+    useEffect(() => {
+        document.documentElement.classList.toggle('matrix-mode', isMatrixMode);
+    }, [isMatrixMode]);
+    
+    const startNewGame = useCallback(async () => {
+        setIsWordLoading(true);
+        setApiError(null);
+        setClue('');
+        try {
+            const wordsForPrompt = usedWords.slice(-MAX_USED_WORDS_IN_PROMPT);
+            const newWord = await getNewWord(wordsForPrompt);
+            
+            const newGameState = {
+                solution: newWord,
+                guesses: [],
+                currentAttempt: 0,
+                status: GameStatus.PLAYING,
+                lastPlayedTs: Date.now()
+            };
+            setGameState(newGameState);
+            setCurrentGuess('');
+            setLetterStatuses({});
+            localStorage.setItem('gameState', JSON.stringify(newGameState));
+
+            // Important: Use a functional update to ensure we have the latest state
+            setUsedWords(prevUsedWords => {
+                const updatedUsedWords = [...prevUsedWords, newWord];
+                localStorage.setItem('usedWords', JSON.stringify(updatedUsedWords));
+                return updatedUsedWords;
+            });
+        } catch (error) {
+            setApiError(error.message || "An unknown error occurred.");
+        } finally {
+            setIsWordLoading(false);
+        }
+    }, [usedWords]);
+
+    const getLetterStatusesFromGuesses = (guesses, solution) => {
+        const statuses = {};
+        guesses.forEach(guess => {
+            guess.split('').forEach((letter, index) => {
+                if (solution[index] === letter) {
+                    statuses[letter] = LetterState.CORRECT;
+                } else if (solution.includes(letter) && statuses[letter] !== LetterState.CORRECT) {
+                    statuses[letter] = LetterState.PRESENT;
+                } else if (!solution.includes(letter)) {
+                    statuses[letter] = LetterState.ABSENT;
+                }
+            });
+        });
+        return statuses;
+    };
+    
+    useEffect(() => {
+        let initialUsedWords = [];
+        try {
+            const savedUsedWords = localStorage.getItem('usedWords');
+            if (savedUsedWords) {
+                initialUsedWords = JSON.parse(savedUsedWords);
+                setUsedWords(initialUsedWords);
+            }
+        } catch (e) { console.error("Could not parse used words", e); }
+        
+        try {
+            const savedStats = localStorage.getItem('gameStats');
+            if (savedStats) {
+                setStats(JSON.parse(savedStats));
+            }
+        } catch (e) { console.error("Could not parse stats", e); }
+
+        let shouldStartNew = true;
+        try {
+            const savedGameState = localStorage.getItem('gameState');
+            if (savedGameState) {
+                const loadedState = JSON.parse(savedGameState);
+                if (loadedState.status === GameStatus.PLAYING || isSameDay(loadedState.lastPlayedTs, Date.now())) {
+                    setGameState(loadedState);
+                    const newLetterStatuses = getLetterStatusesFromGuesses(loadedState.guesses, loadedState.solution);
+                    setLetterStatuses(newLetterStatuses);
+                    if (loadedState.status !== GameStatus.PLAYING) {
+                        setIsEndGameModalOpen(true);
+                    }
+                    setIsWordLoading(false);
+                    shouldStartNew = false;
+                }
+            }
+        } catch (e) { console.error("Could not parse game state", e); }
+
+        if (shouldStartNew) {
+            (async () => {
+                setIsWordLoading(true);
+                setApiError(null);
+                setClue('');
+                try {
+                    const wordsForPrompt = initialUsedWords.slice(-MAX_USED_WORDS_IN_PROMPT);
+                    const newWord = await getNewWord(wordsForPrompt);
+                    
+                    const newGameState = {
+                        solution: newWord,
+                        guesses: [],
+                        currentAttempt: 0,
+                        status: GameStatus.PLAYING,
+                        lastPlayedTs: Date.now()
+                    };
+                    setGameState(newGameState);
+                    setCurrentGuess('');
+                    setLetterStatuses({});
+                    localStorage.setItem('gameState', JSON.stringify(newGameState));
+
+                    const updatedUsedWords = [...initialUsedWords, newWord];
+                    setUsedWords(updatedUsedWords);
+                    localStorage.setItem('usedWords', JSON.stringify(updatedUsedWords));
+                } catch (error) {
+                    setApiError(error.message || "An unknown error occurred.");
+                } finally {
+                    setIsWordLoading(false);
+                }
+            })();
+        }
+    }, []); // This effect should only run once on initial mount.
+    
+    const showToast = (message) => {
+        setToastMessage(message);
+        setTimeout(() => setToastMessage(''), 3000);
+    };
+    
+    const updateStats = useCallback((didWin) => {
+        setStats(prevStats => {
+            const newStats = {...prevStats};
+            newStats.gamesPlayed += 1;
+            if (didWin) {
+                newStats.gamesWon += 1;
+                newStats.currentStreak += 1;
+                newStats.maxStreak = Math.max(newStats.maxStreak, newStats.currentStreak);
+            } else {
+                newStats.currentStreak = 0;
+            }
+            localStorage.setItem('gameStats', JSON.stringify(newStats));
+            return newStats;
+        });
+    }, []);
+
+    const submitGuess = useCallback(() => {
+        if (!gameState || !gameState.solution) return;
+        const newGuesses = [...gameState.guesses, currentGuess];
+        const newAttempt = gameState.currentAttempt + 1;
+        const newLetterStatuses = getLetterStatusesFromGuesses(newGuesses, gameState.solution);
+
+        setLetterStatuses(newLetterStatuses);
+
+        let newStatus = gameState.status;
+        if (currentGuess === gameState.solution) {
+            newStatus = GameStatus.WON;
+        } else if (newAttempt >= MAX_GUESSES) {
+            newStatus = GameStatus.LOST;
+        }
+        
+        const newGameState = { ...gameState, guesses: newGuesses, currentAttempt: newAttempt, status: newStatus, lastPlayedTs: Date.now() };
+        setGameState(newGameState);
+        localStorage.setItem('gameState', JSON.stringify(newGameState));
+
+        if (newStatus !== GameStatus.PLAYING) {
+            updateStats(newStatus === GameStatus.WON);
+            setTimeout(() => setIsEndGameModalOpen(true), 500);
+        }
+        setCurrentGuess('');
+    }, [gameState, currentGuess, updateStats]);
+    
+    const handleKeyPress = useCallback((key) => {
+        if (!gameState || gameState.status !== GameStatus.PLAYING) return;
+
+        if (key === 'enter') {
+            if (currentGuess.length !== gameState.solution.length) {
+                showToast(`Word must be ${gameState.solution.length} letters`);
+                return;
+            }
+            submitGuess();
+            return;
+        }
+
+        if (key === 'backspace') {
+            setCurrentGuess(prev => prev.slice(0, -1));
+            return;
+        }
+
+        if (/^[a-z]$/.test(key)) {
+            if (currentGuess.length < gameState.solution.length) {
+                setCurrentGuess(prev => prev + key);
+            }
+        }
+    }, [currentGuess.length, gameState, submitGuess]);
+
+    const handleGetClue = async () => {
+        if (!gameState || !gameState.solution || clue) return;
+        setIsClueLoading(true);
+        try {
+            const fetchedClue = await getClue(gameState.solution);
+            setClue(fetchedClue);
+        } catch (error) {
+            showToast(error.message || "Failed to fetch clue.");
+        } finally {
+            setIsClueLoading(false);
+        }
+    };
+    
+    const handlePlayAgain = () => {
+        setIsEndGameModalOpen(false);
+        startNewGame();
+    };
+
+    const handleShare = () => {
+        if (!gameState) return;
+        const EMOJI_MAP = {
+            [LetterState.CORRECT]: '🟩',
+            [LetterState.PRESENT]: '🟨',
+            [LetterState.ABSENT]: '⬛',
+        };
+        const title = gameState.status === GameStatus.WON
+            ? `Desi Wordle ${gameState.currentAttempt}/${MAX_GUESSES}`
+            : `Desi Wordle X/${MAX_GUESSES}`;
+        const grid = gameState.guesses.map(guess => {
+            return guess.split('').map((letter, index) => {
+                const state = getLetterState(letter, index, gameState.solution);
+                return EMOJI_MAP[state];
+            }).join('');
+        }).join('\n');
+
+        const shareText = `${title}\n\n${grid}`;
+        navigator.clipboard.writeText(shareText).then(() => {
+            showToast('Results copied to clipboard!');
+        }).catch(() => {
+            showToast('Could not copy results.');
+        });
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (isStatsModalOpen || isEndGameModalOpen || apiError) return;
+            const key = event.key.toLowerCase();
+            if (key === 'enter' || key === 'backspace' || /^[a-z]$/.test(key)) {
+                 handleKeyPress(key);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyPress, isStatsModalOpen, isEndGameModalOpen, apiError]);
+
+    return (
+        <div className="flex flex-col h-screen font-sans">
+            {isMatrixMode && <MatrixBackground />}
+            {toastMessage && (
+                <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-slate-100 text-slate-900 px-4 py-2 rounded-md shadow-lg z-50">
+                    {toastMessage}
+                </div>
+            )}
+            <Header
+                onStatsClick={() => setIsStatsModalOpen(true)}
+                isMatrixMode={isMatrixMode}
+                onMatrixToggle={() => setIsMatrixMode(prev => !prev)}
+            />
+            
+            {apiError ? (
+                <ApiErrorDisplay message={apiError} onRetry={startNewGame} />
+            ) : isWordLoading || !gameState ? (
+                <div className="flex-grow flex items-center justify-center">
+                    <Loader2 className="animate-spin" size={48} />
+                </div>
+            ) : (
+                <>
+                    <Grid solution={gameState.solution} guesses={gameState.guesses} currentAttempt={gameState.currentAttempt} currentGuess={currentGuess} />
+                    <div className="flex flex-col items-center mb-4">
+                        <button onClick={handleGetClue} disabled={isClueLoading || !!clue} className="flex items-center gap-2 px-4 py-2 mb-2 bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors">
+                            {isClueLoading ? <Loader2 className="animate-spin" size={20}/> : <Lightbulb size={20}/>}
+                            <span>{isClueLoading ? 'Getting Clue...' : 'Get a Clue'}</span>
+                        </button>
+                        {clue && <p className="text-sm text-slate-300 italic text-center max-w-md px-4">&ldquo;{clue}&rdquo;</p>}
+                    </div>
+                    <Keyboard onKeyPress={handleKeyPress} letterStatuses={letterStatuses} />
+                </>
+            )}
+
+            <Modal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} title="Statistics">
+                <Stats stats={stats} />
+            </Modal>
+            
+            <Modal isOpen={isEndGameModalOpen} onClose={() => setIsEndGameModalOpen(false)} title={gameState?.status === GameStatus.WON ? "You Won!" : "Better Luck Next Time!"}>
+                <div>
+                    <p className="mb-2">The word was:</p>
+                    <p className="text-2xl font-bold uppercase tracking-widest text-emerald-400 mb-4">{gameState?.solution}</p>
+                    <Stats stats={stats} />
+                    <div className="mt-6 flex flex-col sm:flex-row gap-2 w-full">
+                        <button onClick={handlePlayAgain} className="flex-1 px-4 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors font-bold">
+                            Play Again
+                        </button>
+                        <button onClick={handleShare} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors font-bold">
+                           <Share2 size={18} />
+                           <span>Share</span>
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
+// From index.tsx
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+</script>
+</body>
+</html>
